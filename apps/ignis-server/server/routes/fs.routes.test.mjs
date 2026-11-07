@@ -103,6 +103,24 @@ async function bufferWrite(p, first, second) {
 }
 
 describe("fs route handlers reconcile the coalescer buffer (WRITE_COALESCE_MS > 0)", () => {
+  it("flushes an opted-in write to disk before reporting success", async () => {
+    const content = "durable clip content";
+    const res = await postJson("writeFile", {
+      path: "durable.md",
+      content,
+      flush: true,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(await res.json()).toMatchObject({
+      ok: true,
+      size: Buffer.byteLength(content),
+      flushed: true,
+    });
+    expect(onDisk("durable.md")).toBe(content);
+    expect(writeCoalescer.getPending(abs("durable.md"))).toBeNull();
+  });
+
   it("unlink does not resurrect a deleted file", async () => {
     await bufferWrite("x.md", "v1", "v2");
 

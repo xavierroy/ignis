@@ -239,7 +239,7 @@ router.get("/readFile", async (req, res) => {
   }
 });
 
-// POST /api/fs/writeFile { path, content, encoding?, base64?, vault? }
+// POST /api/fs/writeFile { path, content, encoding?, base64?, vault?, flush? }
 router.post("/writeFile", async (req, res) => {
   const resolved = guardPath(req, res, "body");
 
@@ -259,11 +259,17 @@ router.post("/writeFile", async (req, res) => {
       data = Buffer.from(req.body.content, "base64");
     }
 
-    const result = await writeCoalesced(resolved, data, encoding);
+    let result = await writeCoalesced(resolved, data, encoding);
+    const flushed = req.body.flush === true;
+    if (flushed) {
+      await writeCoalescer.flushPending(resolved);
+      const stat = await fs.promises.stat(resolved);
+      result = { mtime: stat.mtimeMs, size: stat.size };
+    }
     const rel = toRelative(req._vaultRoot, resolved);
     const buffered = getPending(resolved) !== null;
 
-    res.json({ ok: true, mtime: result.mtime, size: result.size });
+    res.json({ ok: true, mtime: result.mtime, size: result.size, flushed });
 
     applyToTree(
       req,
